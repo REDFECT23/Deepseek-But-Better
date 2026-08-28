@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = [];
     let proactiveTimer = null;
     let lastUserMessageTime = Date.now();
-    const PROACTIVE_DELAY = 120000; // 2 минуты молчания
+    const PROACTIVE_DELAY = 30000; // 2 минуты молчания
 
     // Загружаем инструкции из файла
     fetch('instructions.txt')
@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showTyping();
         isLoading = true;
         
-        const model = "gemini-1.5-flash";
+        const model = "gemini-3.7-flash";
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
         
         try {
