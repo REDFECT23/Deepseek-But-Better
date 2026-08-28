@@ -8,20 +8,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveKeyBtn = document.getElementById('saveKey');
     const closeModalBtn = document.getElementById('closeModal');
 
-    let messages = [];
     let isLoading = false;
+    
+    // История чата в формате, который требует Gemini API
+    let chatHistory = [];
 
     const savedKey = localStorage.getItem('gemini_api_key');
     if (savedKey) apiKeyInput.value = savedKey;
 
-    settingsBtn.addEventListener('click', () => {
-        settingsModal.classList.add('active');
-    });
-
-    closeModalBtn.addEventListener('click', () => {
-        settingsModal.classList.remove('active');
-    });
-
+    settingsBtn.addEventListener('click', () => settingsModal.classList.add('active'));
+    closeModalBtn.addEventListener('click', () => settingsModal.classList.remove('active'));
+    
     saveKeyBtn.addEventListener('click', () => {
         const key = apiKeyInput.value.trim();
         if (key) {
@@ -52,12 +49,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiKey = localStorage.getItem('gemini_api_key');
         if (!apiKey) {
             settingsModal.classList.add('active');
-            alert('Вставь API ключ в настройках!');
+            alert('Сначала вставь API ключ в настройках (⚙️)!');
             return;
         }
 
+        // 1. Показываем сообщение пользователя
         addMessage(text, 'user');
-        messages.push({ role: 'user', parts: [{ text: text }] });
+        
+        // 2. Добавляем в историю в формате Gemini
+        chatHistory.push({ parts: [{ text: text }] });
+        
         userInput.value = '';
         userInput.style.height = 'auto';
 
@@ -65,21 +66,18 @@ document.addEventListener('DOMContentLoaded', () => {
         isLoading = true;
         sendBtn.disabled = true;
 
-        // ПРАВИЛЬНЫЙ URL для Gemini API
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // 3. Формируем запрос ТОЧНО как в твоём curl
+        const model = "gemini-1.5-flash"; // или "gemini-2.0-flash"
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
         fetch(url, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'x-goog-api-client': 'genai-js'
+            headers: {
+                'x-goog-api-key': apiKey,
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                contents: messages,
-                generationConfig: {
-                    maxOutputTokens: 300,
-                    temperature: 0.7
-                }
+                contents: chatHistory
             })
         })
         .then(res => {
@@ -96,15 +94,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.candidates && data.candidates[0] && data.candidates[0].content) {
                 const reply = data.candidates[0].content.parts[0].text;
                 addMessage(reply, 'bot');
-                messages.push({ role: 'model', parts: [{ text: reply }] });
+                
+                // Добавляем ответ ИИ в историю, чтобы он помнил контекст
+                chatHistory.push({ parts: [{ text: reply }] });
             } else {
-                addMessage('Пустой ответ от API', 'bot');
+                addMessage('Пустой ответ. Проверь ключ или модель.', 'bot');
+                console.log('Полный ответ API:', data);
             }
         })
         .catch(err => {
             removeTyping();
             addMessage('Ошибка: ' + err.message, 'bot');
-            console.error('Full error:', err);
+            console.error('Полная ошибка:', err);
         })
         .finally(() => {
             isLoading = false;
