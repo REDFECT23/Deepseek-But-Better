@@ -1,4 +1,3 @@
-// Ждём полной загрузки страницы
 document.addEventListener('DOMContentLoaded', () => {
     const chat = document.getElementById('chat');
     const userInput = document.getElementById('userInput');
@@ -12,52 +11,31 @@ document.addEventListener('DOMContentLoaded', () => {
     let messages = [];
     let isLoading = false;
 
-    // Проверка что все элементы найдены
-    console.log('Элементы:', {
-        chat: !!chat,
-        userInput: !!userInput,
-        sendBtn: !!sendBtn,
-        settingsBtn: !!settingsBtn,
-        settingsModal: !!settingsModal
-    });
-
-    // Загрузка API ключа
     const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) {
-        apiKeyInput.value = savedKey;
-        console.log('Ключ найден в localStorage');
-    }
+    if (savedKey) apiKeyInput.value = savedKey;
 
-    // Кнопка настроек
     settingsBtn.addEventListener('click', () => {
-        console.log('Клик по настройкам!');
         settingsModal.classList.add('active');
     });
 
-    // Закрыть модалку
     closeModalBtn.addEventListener('click', () => {
         settingsModal.classList.remove('active');
     });
 
-    // Сохранить ключ
     saveKeyBtn.addEventListener('click', () => {
         const key = apiKeyInput.value.trim();
         if (key) {
             localStorage.setItem('gemini_api_key', key);
             settingsModal.classList.remove('active');
-            alert('Ключ сохранён! Теперь можешь писать сообщения.');
-        } else {
-            alert('Вставь ключ!');
+            alert('Ключ сохранён!');
         }
     });
 
-    // Автоувеличение textarea
     userInput.addEventListener('input', () => {
         userInput.style.height = 'auto';
         userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
     });
 
-    // Отправка по Enter
     userInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -74,12 +52,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiKey = localStorage.getItem('gemini_api_key');
         if (!apiKey) {
             settingsModal.classList.add('active');
-            alert('Сначала вставь API ключ Gemini в настройках!');
+            alert('Вставь API ключ в настройках!');
             return;
         }
 
         addMessage(text, 'user');
-        messages.push({ role: 'user', content: text });
+        messages.push({ role: 'user', parts: [{ text: text }] });
         userInput.value = '';
         userInput.style.height = 'auto';
 
@@ -87,21 +65,17 @@ document.addEventListener('DOMContentLoaded', () => {
         isLoading = true;
         sendBtn.disabled = true;
 
-        // Формируем промпт с историей
-        let prompt = text;
-        if (messages.length > 1) {
-            prompt = messages.map(m => 
-                `${m.role === 'user' ? 'Человек' : 'ИИ'}: ${m.content}`
-            ).join('\n') + `\nЧеловек: ${text}\nИИ:`;
-        }
+        // ПРАВИЛЬНЫЙ URL для Gemini API
+        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-        fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+        fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-goog-api-client': 'genai-js'
+            },
             body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: prompt }]
-                }],
+                contents: messages,
                 generationConfig: {
                     maxOutputTokens: 300,
                     temperature: 0.7
@@ -109,27 +83,28 @@ document.addEventListener('DOMContentLoaded', () => {
             })
         })
         .then(res => {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
+            if (!res.ok) {
+                return res.text().then(text => {
+                    throw new Error(`${res.status}: ${text}`);
+                });
+            }
             return res.json();
         })
         .then(data => {
             removeTyping();
-            console.log('Ответ:', data);
             
-            if (data.candidates && data.candidates[0]) {
+            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
                 const reply = data.candidates[0].content.parts[0].text;
                 addMessage(reply, 'bot');
-                messages.push({ role: 'assistant', content: reply });
-            } else if (data.error) {
-                addMessage('Ошибка: ' + data.error.message, 'bot');
+                messages.push({ role: 'model', parts: [{ text: reply }] });
             } else {
-                addMessage('Пустой ответ', 'bot');
+                addMessage('Пустой ответ от API', 'bot');
             }
         })
         .catch(err => {
             removeTyping();
             addMessage('Ошибка: ' + err.message, 'bot');
-            console.error(err);
+            console.error('Full error:', err);
         })
         .finally(() => {
             isLoading = false;
