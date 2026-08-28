@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sendBtn.disabled = true;
 
         // 3. Формируем запрос ТОЧНО как в твоём curl
-        const model = "gemini-1.5-flash"; // или "gemini-2.0-flash"
+        const model = "gemini-3.7-flash"; // или "gemini-2.0-flash"
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
         fetch(url, {
