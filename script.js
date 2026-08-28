@@ -10,6 +10,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isLoading = false;
     let chatHistory = [];
+    let proactiveTimer = null;
+    let lastUserMessageTime = Date.now();
+    const PROACTIVE_DELAY = 120000; // 2 минуты молчания
+
+    // Загружаем инструкции из файла
+    fetch('instructions.txt')
+        .then(res => res.text())
+        .then(text => {
+            window.SYSTEM_INSTRUCTIONS = text;
+            console.log('Инструкции загружены:', text.length, 'символов');
+        })
+        .catch(err => {
+            console.error('Не удалось загрузить instructions.txt:', err);
+            window.SYSTEM_INSTRUCTIONS = 'Ты живой собеседник. Отвечай кратко и по-человечески.';
+        });
 
     const savedKey = localStorage.getItem('gemini_api_key');
     if (savedKey) apiKeyInput.value = savedKey;
@@ -29,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     userInput.addEventListener('input', () => {
         userInput.style.height = 'auto';
         userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
+        resetProactiveTimer(); // Сбрасываем таймер при вводе
     });
 
     userInput.addEventListener('keydown', (e) => {
@@ -39,6 +55,109 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     sendBtn.addEventListener('click', sendMessage);
+
+    // Анализируем стиль пользователя
+    function analyzeUserStyle(text) {
+        const style = [];
+        
+        // Длина сообщения
+        if (text.length < 20) {
+            style.push('Пользователь пишет ОЧЕНЬ КРАТКО. Ответь максимально коротко, 1-2 предложения.');
+        } else if (text.length < 100) {
+            style.push('Пользователь пишет кратко. Ответь тоже кратко, 2-3 предложения.');
+        } else if (text.length > 500) {
+            style.push('Пользователь пишет развёрнуто. Можешь ответить подробно.');
+        }
+        
+        // Капс
+        if (text === text.toUpperCase() && text.length > 5) {
+            style.push('Пользователь пишет КАПСОМ — он эмоционален. Можешь ответить с энергией.');
+        }
+        
+        // Вопросы
+        if (text.includes('?')) {
+            style.push('Пользователь задал вопрос. Ответь на него, но можешь задать встречный.');
+        }
+        
+        // Сленг/неформальность
+        if (/блин|блиять|хуй|пизд|ебат|да ладно|ага|ок|лол/i.test(text)) {
+            style.push('Пользователь пишет неформально, использует сленг. Отвечай в том же стиле, без официоза.');
+        }
+        
+        return style.join(' ');
+    }
+
+    // Сброс таймера проактивности
+    function resetProactiveTimer() {
+        clearTimeout(proactiveTimer);
+        lastUserMessageTime = Date.now();
+        
+        proactiveTimer = setTimeout(() => {
+            triggerProactiveMessage();
+        }, PROACTIVE_DELAY);
+    }
+
+    // ИИ пишет сам
+    async function triggerProactiveMessage() {
+        if (isLoading) return;
+        
+        const apiKey = localStorage.getItem('gemini_api_key');
+        if (!apiKey) return;
+        
+        // Генерируем проактивное сообщение
+        const proactivePrompt = `Пользователь молчит уже 2 минуты. Напиши ему короткое сообщение (1-2 предложения), чтобы возобновить разговор. 
+        Можешь:
+        - Прокомментировать последнее сообщение в чате
+        - Задать неожиданный вопрос
+        - Поделиться мыслью
+        - Просто спросить "ты тут?"
+        
+        Будь естественным, как живой человек в мессенджере. Не используй "Как языковая модель".`;
+        
+        // Добавляем в историю как системную подсказку
+        chatHistory.push({ 
+            parts: [{ text: `[СИСТЕМА: Пользователь молчит. Напиши ему что-нибудь интересное.]` }] 
+        });
+        
+        showTyping();
+        isLoading = true;
+        
+        const model = "gemini-1.5-flash";
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'x-goog-api-key': apiKey,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contents: chatHistory,
+                    systemInstruction: {
+                        parts: [{ text: window.SYSTEM_INSTRUCTIONS }]
+                    }
+                })
+            });
+            
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
+            const data = await res.json();
+            removeTyping();
+            
+            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                const reply = data.candidates[0].content.parts[0].text;
+                addMessage(reply, 'bot');
+                chatHistory.push({ parts: [{ text: reply }] });
+            }
+        } catch (err) {
+            removeTyping();
+            console.error('Проактивная ошибка:', err);
+        } finally {
+            isLoading = false;
+            resetProactiveTimer(); // Перезапускаем таймер
+        }
+    }
 
     function sendMessage() {
         const text = userInput.value.trim();
@@ -61,9 +180,20 @@ document.addEventListener('DOMContentLoaded', () => {
         isLoading = true;
         sendBtn.disabled = true;
 
-        // ИСПОЛЬЗУЕМ gemini-3.7-flash как ты сказал
-        const model = "gemini-3.7-flash";
+        const model = "gemini-1.5-flash";
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+        // Анализируем стиль и добавляем адаптацию
+        const userStyle = analyzeUserStyle(text);
+        const adaptiveInstruction = userStyle ? `\n\n[АДАПТАЦИЯ: ${userStyle}]` : '';
+
+        // Временно добавляем адаптацию в историю
+        const adaptedHistory = [...chatHistory];
+        if (adaptiveInstruction) {
+            adaptedHistory.push({ 
+                parts: [{ text: `[СИСТЕМНАЯ ПОДСКАЗКА: ${userStyle}]` }] 
+            });
+        }
 
         fetch(url, {
             method: 'POST',
@@ -72,7 +202,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                contents: chatHistory
+                contents: adaptedHistory,
+                systemInstruction: {
+                    parts: [{ text: window.SYSTEM_INSTRUCTIONS }]
+                },
+                generationConfig: {
+                    temperature: 0.8,
+                    maxOutputTokens: 300
+                }
             })
         })
         .then(res => {
@@ -102,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .finally(() => {
             isLoading = false;
             sendBtn.disabled = false;
+            resetProactiveTimer(); // Сбрасываем таймер после ответа
         });
     }
 
@@ -131,4 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // Запускаем таймер проактивности при загрузке
+    resetProactiveTimer();
 });
