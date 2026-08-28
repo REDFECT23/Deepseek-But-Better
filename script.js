@@ -12,9 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = [];
     let proactiveTimer = null;
     let lastUserMessageTime = Date.now();
-    const PROACTIVE_DELAY = 30000; // 2 минуты молчания
+    const PROACTIVE_DELAY = 120000;
 
-    // Загружаем инструкции из файла
     fetch('instructions.txt')
         .then(res => res.text())
         .then(text => {
@@ -44,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     userInput.addEventListener('input', () => {
         userInput.style.height = 'auto';
         userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
-        resetProactiveTimer(); // Сбрасываем таймер при вводе
+        resetProactiveTimer();
     });
 
     userInput.addEventListener('keydown', (e) => {
@@ -56,11 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     sendBtn.addEventListener('click', sendMessage);
 
-    // Анализируем стиль пользователя
     function analyzeUserStyle(text) {
         const style = [];
         
-        // Длина сообщения
         if (text.length < 20) {
             style.push('Пользователь пишет ОЧЕНЬ КРАТКО. Ответь максимально коротко, 1-2 предложения.');
         } else if (text.length < 100) {
@@ -69,17 +66,14 @@ document.addEventListener('DOMContentLoaded', () => {
             style.push('Пользователь пишет развёрнуто. Можешь ответить подробно.');
         }
         
-        // Капс
         if (text === text.toUpperCase() && text.length > 5) {
             style.push('Пользователь пишет КАПСОМ — он эмоционален. Можешь ответить с энергией.');
         }
         
-        // Вопросы
         if (text.includes('?')) {
             style.push('Пользователь задал вопрос. Ответь на него, но можешь задать встречный.');
         }
         
-        // Сленг/неформальность
         if (/блин|блиять|хуй|пизд|ебат|да ладно|ага|ок|лол/i.test(text)) {
             style.push('Пользователь пишет неформально, использует сленг. Отвечай в том же стиле, без официоза.');
         }
@@ -87,7 +81,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return style.join(' ');
     }
 
-    // Сброс таймера проактивности
     function resetProactiveTimer() {
         clearTimeout(proactiveTimer);
         lastUserMessageTime = Date.now();
@@ -97,24 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }, PROACTIVE_DELAY);
     }
 
-    // ИИ пишет сам
     async function triggerProactiveMessage() {
         if (isLoading) return;
         
         const apiKey = localStorage.getItem('gemini_api_key');
         if (!apiKey) return;
         
-        // Генерируем проактивное сообщение
-        const proactivePrompt = `Пользователь молчит уже 2 минуты. Напиши ему короткое сообщение (1-2 предложения), чтобы возобновить разговор. 
-        Можешь:
-        - Прокомментировать последнее сообщение в чате
-        - Задать неожиданный вопрос
-        - Поделиться мыслью
-        - Просто спросить "ты тут?"
-        
-        Будь естественным, как живой человек в мессенджере. Не используй "Как языковая модель".`;
-        
-        // Добавляем в историю как системную подсказку
         chatHistory.push({ 
             parts: [{ text: `[СИСТЕМА: Пользователь молчит. Напиши ему что-нибудь интересное.]` }] 
         });
@@ -155,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Проактивная ошибка:', err);
         } finally {
             isLoading = false;
-            resetProactiveTimer(); // Перезапускаем таймер
+            resetProactiveTimer();
         }
     }
 
@@ -183,11 +164,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const model = "gemini-3.7-flash";
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-        // Анализируем стиль и добавляем адаптацию
         const userStyle = analyzeUserStyle(text);
         const adaptiveInstruction = userStyle ? `\n\n[АДАПТАЦИЯ: ${userStyle}]` : '';
 
-        // Временно добавляем адаптацию в историю
         const adaptedHistory = [...chatHistory];
         if (adaptiveInstruction) {
             adaptedHistory.push({ 
@@ -239,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .finally(() => {
             isLoading = false;
             sendBtn.disabled = false;
-            resetProactiveTimer(); // Сбрасываем таймер после ответа
+            resetProactiveTimer();
         });
     }
 
@@ -270,6 +249,5 @@ document.addEventListener('DOMContentLoaded', () => {
         return div.innerHTML;
     }
 
-    // Запускаем таймер проактивности при загрузке
     resetProactiveTimer();
 });
