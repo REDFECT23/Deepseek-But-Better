@@ -9,8 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeModalBtn = document.getElementById('closeModal');
 
     let isLoading = false;
-    
-    // История чата в формате, который требует Gemini API
     let chatHistory = [];
 
     const savedKey = localStorage.getItem('gemini_api_key');
@@ -53,10 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 1. Показываем сообщение пользователя
         addMessage(text, 'user');
-        
-        // 2. Добавляем в историю в формате Gemini
         chatHistory.push({ parts: [{ text: text }] });
         
         userInput.value = '';
@@ -66,8 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isLoading = true;
         sendBtn.disabled = true;
 
-        // 3. Формируем запрос ТОЧНО как в твоём curl
-        const model = "gemini-3.7-flash"; // или "gemini-2.0-flash"
+        // ИСПОЛЬЗУЕМ gemini-3.7-flash как ты сказал
+        const model = "gemini-3.7-flash";
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
         fetch(url, {
@@ -94,18 +89,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.candidates && data.candidates[0] && data.candidates[0].content) {
                 const reply = data.candidates[0].content.parts[0].text;
                 addMessage(reply, 'bot');
-                
-                // Добавляем ответ ИИ в историю, чтобы он помнил контекст
                 chatHistory.push({ parts: [{ text: reply }] });
             } else {
-                addMessage('Пустой ответ. Проверь ключ или модель.', 'bot');
-                console.log('Полный ответ API:', data);
+                addMessage('Пустой ответ.', 'bot');
             }
         })
         .catch(err => {
             removeTyping();
             addMessage('Ошибка: ' + err.message, 'bot');
-            console.error('Полная ошибка:', err);
+            console.error('Ошибка:', err);
         })
         .finally(() => {
             isLoading = false;
