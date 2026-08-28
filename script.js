@@ -11,14 +11,14 @@ let messages = [];
 let isLoading = false;
 
 // Загрузка API ключа из localStorage
-const savedKey = localStorage.getItem('deepseek_api_key');
+const savedKey = localStorage.getItem('gemini_api_key');
 if (savedKey) apiKeyInput.value = savedKey;
 
 // Настройки
 settingsBtn.addEventListener('click', () => settingsModal.classList.add('active'));
 closeModalBtn.addEventListener('click', () => settingsModal.classList.remove('active'));
 saveKeyBtn.addEventListener('click', () => {
-    localStorage.setItem('deepseek_api_key', apiKeyInput.value);
+    localStorage.setItem('gemini_api_key', apiKeyInput.value);
     settingsModal.classList.remove('active');
     alert('Ключ сохранён!');
 });
@@ -43,7 +43,7 @@ function sendMessage() {
     const text = userInput.value.trim();
     if (!text || isLoading) return;
 
-    const apiKey = localStorage.getItem('deepseek_api_key');
+    const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) {
         settingsModal.classList.add('active');
         return;
@@ -60,29 +60,37 @@ function sendMessage() {
     isLoading = true;
     sendBtn.disabled = true;
 
-    // Запрос к Deepseek API
-    fetch('https://api.deepseek.com/chat/completions', {
+    // Формируем историю для Gemini
+    const conversationHistory = messages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+    }));
+
+    // Запрос к Gemini API
+    fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: messages,
-            max_tokens: 300,
-            temperature: 0.7
+            contents: conversationHistory,
+            generationConfig: {
+                maxOutputTokens: 300,
+                temperature: 0.7
+            }
         })
     })
     .then(res => res.json())
     .then(data => {
         removeTyping();
-        if (data.choices && data.choices[0]) {
-            const reply = data.choices[0].message.content;
+        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+            const reply = data.candidates[0].content.parts[0].text;
             addMessage(reply, 'bot');
             messages.push({ role: 'assistant', content: reply });
+        } else if (data.error) {
+            addMessage('Ошибка: ' + data.error.message, 'bot');
         } else {
-            addMessage('Ошибка: ' + JSON.stringify(data), 'bot');
+            addMessage('Непонятный ответ от API', 'bot');
         }
     })
     .catch(err => {
@@ -113,6 +121,14 @@ function showTyping() {
 
 function removeTyping() {
     const indicator = chat.querySelector('.typing-indicator');
+    if (indicator) indicator.remove();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}    const indicator = chat.querySelector('.typing-indicator');
     if (indicator) indicator.remove();
 }
 
