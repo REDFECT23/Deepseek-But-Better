@@ -18,6 +18,7 @@ body {
     height: 100vh;
     max-width: 800px;
     margin: 0 auto;
+    position: relative;
 }
 
 .header {
@@ -27,6 +28,7 @@ body {
     padding: 16px 20px;
     border-bottom: 1px solid #1a1a1a;
     background: #0d0d0d;
+    flex-shrink: 0;
 }
 
 .header h1 {
@@ -52,6 +54,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
 }
 
 .message {
@@ -94,6 +97,13 @@ body {
     border-top: 1px solid #1a1a1a;
     background: #0d0d0d;
     align-items: flex-end;
+    flex-shrink: 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
 #userInput {
@@ -108,6 +118,7 @@ body {
     max-height: 120px;
     font-family: inherit;
     outline: none;
+    padding-right: 60px;
 }
 
 #userInput:focus {
@@ -115,6 +126,9 @@ body {
 }
 
 #sendBtn {
+    position: absolute;
+    right: 30px;
+    bottom: 20px;
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -230,4 +244,9 @@ body {
 @keyframes bounce {
     0%, 60%, 100% { transform: translateY(0); }
     30% { transform: translateY(-6px); }
-  }
+}
+
+/* Добавил отступ снизу для чата чтобы не перекрывался полем ввода */
+.chat {
+    padding-bottom: 100px;
+}
