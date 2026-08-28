@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isLoading = true;
         sendBtn.disabled = true;
 
-        const model = "gemini-1.5-flash";
+        const model = "gemini-3.7-flash";
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
         // Анализируем стиль и добавляем адаптацию
